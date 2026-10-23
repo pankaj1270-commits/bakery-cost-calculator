@@ -1,0 +1,24 @@
+{
+  "name": "bakery-product-cost-calculator",
+  "version": "1.0.0",
+  "description": "Bakery Product Cost & Selling Price Calculator Software",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build && cd ../backend && npm install",
+    "start": "node backend/src/index.js",
+    "dev:backend": "node --watch backend/src/index.js",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "test": "cd backend && npm test",
+    "deploy:firebase": "cd frontend && npm run build && firebase deploy --only hosting"
+  },
+  "keywords": [
+    "bakery",
+    "cost-calculator",
+    "recipe-costing",
+    "profit-margin",
+    "firebase-free-tier"
+  ],
+  "author": "",
+  "license": "MIT"
+}
