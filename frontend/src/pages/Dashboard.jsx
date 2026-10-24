@@ -25,11 +25,14 @@ import {
 } from 'recharts';
 import StatCard from '../components/StatCard.jsx';
 import { api } from '../services/api.js';
+import { userService } from '../services/userService.js';
 import { formatINR, formatDate } from '../utils/formatters.js';
 
 export default function Dashboard({ onNavigate, onOpenRecipe }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const currentUser = userService.getCurrentUser();
+  const bakeryTitle = currentUser && currentUser.bakeryName ? currentUser.bakeryName : null;
 
   useEffect(() => {
     loadData();
@@ -74,10 +77,10 @@ export default function Dashboard({ onNavigate, onOpenRecipe }) {
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-semibold mb-3">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Bakery Financial Intelligence</span>
+            <span>{bakeryTitle ? `${bakeryTitle} • Financial Intelligence` : 'Bakery Financial Intelligence'}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Bakery Cost & Margin Dashboard
+            {bakeryTitle ? `${bakeryTitle} Cost & Margin Dashboard` : 'Bakery Cost & Margin Dashboard'}
           </h1>
           <p className="mt-2 text-amber-100 text-sm leading-relaxed">
             Track exact ingredient costs, production overheads, wastage buffers, and enforce optimal profit margins for your baked goods.
