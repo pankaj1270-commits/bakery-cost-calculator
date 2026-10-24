@@ -1,16 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar.jsx';
+import LoginPage from './components/LoginPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Ingredients from './pages/Ingredients.jsx';
 import Recipes from './pages/Recipes.jsx';
 import RecipeDetail from './pages/RecipeDetail.jsx';
 import Reports from './pages/Reports.jsx';
 import SettingsPage from './pages/Settings.jsx';
+import { firebaseService } from './services/firebase.js';
+import { userService } from './services/userService.js';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeRecipeId, setActiveRecipeId] = useState('rec-1'); // Default to Biscuit recipe spec
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = userService.onAuthChange((user) => {
+      setCurrentUser(user);
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleOpenRecipe = (recipeId) => {
     setActiveRecipeId(recipeId);
@@ -21,9 +36,35 @@ export default function App() {
     setReloadKey(prev => prev + 1);
   };
 
+  const handleLogout = () => {
+    userService.logout();
+  };
+
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+        <p className="text-xs text-slate-400 font-medium">Securing BakeCost Workspace...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <LoginPage 
+        onLoginSuccess={() => setLoadingAuth(false)}
+      />
+    );
+  }
+
   return (
     <div key={reloadKey} className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'dashboard' && (

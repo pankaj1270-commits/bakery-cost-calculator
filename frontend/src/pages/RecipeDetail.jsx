@@ -129,6 +129,16 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
     recalculateState({ ...recipe, useHistoricalPricing: useHist });
   };
 
+  // Yield update
+  const handleYieldCountChange = (val) => {
+    const count = Math.max(1, Number(val) || 1);
+    recalculateState({ ...recipe, yieldCount: count });
+  };
+
+  const handleYieldUnitChange = (unit) => {
+    recalculateState({ ...recipe, yieldUnit: unit });
+  };
+
   // Production Overheads update
   const handleProductionChange = (newProdData) => {
     recalculateState({
@@ -139,7 +149,9 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
       transportCost: newProdData.transportCost,
       otherExpenses: newProdData.otherExpenses,
       wastagePercentage: newProdData.wastagePercentage,
-      wastageBasis: newProdData.wastageBasis
+      wastageBasis: newProdData.wastageBasis,
+      yieldCount: newProdData.yieldCount !== undefined ? newProdData.yieldCount : recipe.yieldCount,
+      yieldUnit: newProdData.yieldUnit !== undefined ? newProdData.yieldUnit : recipe.yieldUnit
     });
   };
 
@@ -264,8 +276,10 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Category: {recipe.category} • Yield: {recipe.yieldCount} {recipe.yieldUnit}
+            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+              <span>Category: {recipe.category}</span>
+              <span>•</span>
+              <span>Total Yield: <strong className="text-amber-800 font-extrabold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">{recipe.yieldCount} {recipe.yieldUnit}</strong></span>
             </p>
           </div>
         </div>
@@ -359,6 +373,63 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
           </div>
         </div>
       )}
+
+      {/* Interactive Batch Yield Controller & Live Per-Unit Cost Banner */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white border-2 border-amber-300 rounded-2xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-500 text-white flex items-center justify-center font-bold shadow-md shadow-amber-500/25 shrink-0">
+            <Layers className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-extrabold text-slate-900">
+                Batch Yield (Total Finished {recipe.yieldUnit || 'Biscuits'})
+              </h3>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                Live Price Divider
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Enter the total biscuits produced from this batch. Cost per biscuit and selling price update instantly!
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 bg-amber-50/80 p-2.5 rounded-xl border border-amber-300 shadow-2xs self-start md:self-auto">
+          <div>
+            <span className="block text-[10px] font-extrabold text-amber-900 uppercase tracking-wider mb-1">
+              Enter Total Yield
+            </span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={recipe.yieldCount === 0 ? '' : recipe.yieldCount}
+                onChange={(e) => handleYieldCountChange(e.target.value)}
+                className="w-24 px-3 py-1.5 rounded-lg border-2 border-amber-400 bg-white font-black text-amber-950 text-lg text-center shadow-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                placeholder="50"
+              />
+              <input
+                type="text"
+                value={recipe.yieldUnit || 'biscuits'}
+                onChange={(e) => handleYieldUnitChange(e.target.value)}
+                className="w-24 px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+                placeholder="biscuits"
+              />
+            </div>
+          </div>
+
+          <div className="pl-4 border-l-2 border-amber-300 text-right">
+            <span className="block text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider">
+              Exact Cost Per {recipe.yieldUnit?.replace(/s$/, '') || 'Biscuit'}
+            </span>
+            <span className="text-2xl font-black text-emerald-700 tracking-tight">
+              {formatINR(recipe.productionCost ? recipe.productionCost.costPerProduct : 0)}
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* Pricing Mode Toggle: Live Ingredient Prices vs Historical Snapshot */}
       <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -545,7 +616,9 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
           transportCost: recipe.transportCost,
           otherExpenses: recipe.otherExpenses,
           wastagePercentage: recipe.wastagePercentage,
-          wastageBasis: recipe.wastageBasis
+          wastageBasis: recipe.wastageBasis,
+          yieldCount: recipe.yieldCount,
+          yieldUnit: recipe.yieldUnit
         }}
         ingredientCost={recipe.totalIngredientCost}
         onChange={handleProductionChange}

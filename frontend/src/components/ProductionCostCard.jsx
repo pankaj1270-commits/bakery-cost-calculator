@@ -24,8 +24,12 @@ export default function ProductionCostCard({
     transportCost = 0,
     otherExpenses = 0,
     wastagePercentage = 0,
-    wastageBasis = 'ingredients'
+    wastageBasis = 'ingredients',
+    yieldCount = 1,
+    yieldUnit = 'biscuits'
   } = productionData;
+
+  const count = Math.max(1, Number(yieldCount) || 1);
 
   const handleChange = (field, val) => {
     onChange({
@@ -47,6 +51,7 @@ export default function ProductionCostCard({
 
   const wastageCost = Math.round((rawWastage + Number.EPSILON) * 100) / 100;
   const totalProductionCost = Math.round((directSubtotal + wastageCost + Number.EPSILON) * 100) / 100;
+  const costPerProduct = totalProductionCost / count;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
@@ -61,8 +66,11 @@ export default function ProductionCostCard({
           </p>
         </div>
         <div className="text-right">
-          <span className="text-xs text-slate-500 font-medium">Batch Production Total</span>
+          <span className="text-xs text-slate-500 font-medium">Batch Total • {count} {yieldUnit}</span>
           <p className="text-xl font-extrabold text-amber-700">{formatINR(totalProductionCost)}</p>
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 inline-block mt-0.5">
+            {formatINR(costPerProduct)} per {yieldUnit.replace(/s$/, '') || 'piece'}
+          </span>
         </div>
       </div>
 
@@ -196,6 +204,29 @@ export default function ProductionCostCard({
             <span className="absolute right-3 top-2.5 text-slate-400 text-xs font-bold">%</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">Trimmings, dough residue, breakage</span>
+        </div>
+
+        {/* Batch Yield Count */}
+        <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+          <label className="block text-xs font-bold text-amber-950 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-amber-700" />
+              <span>Total Yield ({yieldUnit || 'units'})</span>
+            </span>
+            <span className="text-[11px] text-amber-900 font-extrabold">{count} pcs</span>
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={yieldCount === 0 ? '' : yieldCount}
+              placeholder="50"
+              onChange={(e) => handleChange('yieldCount', Math.max(1, Number(e.target.value) || 1))}
+              className="w-full px-3 py-2 rounded-lg border-2 border-amber-300 text-sm font-black text-amber-950 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+          <span className="text-[11px] text-amber-900/80 mt-1 block font-medium">Divides total cost to get per-unit price</span>
         </div>
       </div>
 

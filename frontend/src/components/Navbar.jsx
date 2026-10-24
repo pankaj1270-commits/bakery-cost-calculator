@@ -9,13 +9,19 @@ import {
   Menu, 
   X, 
   Cloud, 
-  HardDrive
+  HardDrive,
+  LogOut,
+  User,
+  Phone
 } from 'lucide-react';
-import { firebaseService } from '../services/firebase.js';
+import { firebaseService, identifierToPhone } from '../services/firebase.js';
 
-export default function Navbar({ activeTab, setActiveTab }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isCloud = firebaseService.isConfigured;
+  const userPhoneLabel = currentUser 
+    ? (currentUser.displayName || currentUser.formattedMobile || currentUser.mobile || identifierToPhone(currentUser)) 
+    : '';
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -73,8 +79,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
             })}
           </nav>
 
-          {/* Right Status Badge */}
-          <div className="hidden lg:flex items-center gap-3">
+          {/* Right Status Badge & Auth */}
+          <div className="hidden lg:flex items-center gap-2.5">
             <button
               onClick={() => handleNavClick('settings')}
               className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full font-medium border transition-colors ${
@@ -87,15 +93,45 @@ export default function Navbar({ activeTab, setActiveTab }) {
               {isCloud ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Firebase Cloud Synced</span>
+                  <span>Cloud Synced</span>
                 </>
               ) : (
                 <>
                   <HardDrive className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Local & Firebase Free Tier</span>
+                  <span>Local Mode</span>
                 </>
               )}
             </button>
+
+            {currentUser ? (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold border border-amber-300 shadow-2xs">
+                  <Phone className="w-3.5 h-3.5 text-amber-700" />
+                </div>
+                <span className="text-xs font-semibold text-slate-700 max-w-[150px] truncate" title={userPhoneLabel}>
+                  {userPhoneLabel}
+                </span>
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                  Demo Guest
+                </span>
+                <button
+                  onClick={onLogout}
+                  className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline px-1.5 py-1"
+                >
+                  Sign In
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -131,7 +167,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
               </button>
             );
           })}
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
             <button
               onClick={() => handleNavClick('settings')}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-50 text-amber-900 border border-amber-200"
@@ -139,6 +175,23 @@ export default function Navbar({ activeTab, setActiveTab }) {
               <HardDrive className="w-4 h-4 text-amber-600" />
               <span>Storage & Firebase Settings</span>
             </button>
+            {currentUser ? (
+              <button
+                onClick={() => { onLogout(); setMobileMenuOpen(false); }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 border border-rose-200"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out ({userPhoneLabel})</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => { onLogout(); setMobileMenuOpen(false); }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white shadow-sm"
+              >
+                <User className="w-4 h-4" />
+                <span>Sign In with Account</span>
+              </button>
+            )}
           </div>
         </div>
       )}

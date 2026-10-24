@@ -11,7 +11,8 @@ import {
   HelpCircle,
   ExternalLink,
   ShieldCheck,
-  Server
+  Server,
+  RefreshCw
 } from 'lucide-react';
 import { firebaseService } from '../services/firebase.js';
 import { api } from '../services/api.js';
@@ -22,6 +23,21 @@ export default function SettingsPage({ onReload }) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [backupSuccess, setBackupSuccess] = useState('');
   const [errorToast, setErrorToast] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncToFirestore = async () => {
+    try {
+      setSyncing(true);
+      const res = await api.syncAllToFirestore();
+      setBackupSuccess(`Synced ${res.ingCount} ingredients and ${res.recCount} recipes to Cloud Firestore!`);
+      setTimeout(() => setBackupSuccess(''), 4000);
+      if (onReload) onReload();
+    } catch (err) {
+      setErrorToast('Sync failed: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleSaveFirebase = (e) => {
     e.preventDefault();
@@ -221,6 +237,17 @@ export default function SettingsPage({ onReload }) {
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
+            {firebaseService.isConfigured && (
+              <button
+                type="button"
+                onClick={handleSyncToFirestore}
+                disabled={syncing}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                <span>{syncing ? 'Syncing to Cloud...' : 'Upload All Local Data to Firestore'}</span>
+              </button>
+            )}
             <button
               type="submit"
               className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-500/20 transition-all"
