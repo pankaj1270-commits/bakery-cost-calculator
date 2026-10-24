@@ -4,6 +4,15 @@ import { firebaseService } from './firebase.js';
 const AUTH_STORAGE_KEY = 'bakecost_auth_user_session_v1';
 const LOCAL_USERS_KEY = 'bakecost_local_users_v1';
 
+export const ADMIN_MOBILES = ['9756259249', '8574372555'];
+
+export function isUserAdmin(user) {
+  if (!user) return false;
+  const raw = (user.mobile || user.phoneNumber || '').toString().replace(/[^0-9]/g, '');
+  const digits10 = raw.slice(-10);
+  return ADMIN_MOBILES.includes(digits10);
+}
+
 class UserService {
   constructor() {
     this.currentUser = this.loadSession();

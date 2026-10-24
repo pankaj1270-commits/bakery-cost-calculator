@@ -5,6 +5,8 @@ import {
   BookOpen, 
   Calculator, 
   BarChart3, 
+  LayoutDashboard,
+  FileText,
   Settings, 
   Menu, 
   X, 
@@ -16,10 +18,12 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { firebaseService, identifierToPhone } from '../services/firebase.js';
+import { isUserAdmin } from '../services/userService.js';
 
 export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isCloud = firebaseService.isConfigured;
+  const isAdmin = isUserAdmin(currentUser);
 
   const bakeryTitle = currentUser && currentUser.bakeryName && currentUser.bakeryName.trim()
     ? currentUser.bakeryName.trim()
@@ -30,12 +34,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout 
     : '';
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'ingredients', label: 'Ingredients', icon: Wheat },
     { id: 'recipes', label: 'Recipes', icon: BookOpen },
     { id: 'calculator', label: 'Costing', icon: Calculator },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings }
+    { id: 'reports', label: 'Reports', icon: FileText },
+    ...(isAdmin ? [{ id: 'settings', label: 'Settings', icon: Settings }] : [])
   ];
 
   const handleNavClick = (id) => {
@@ -99,27 +103,50 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout 
 
             {/* Right Status Badge & Auth (Desktop) */}
             <div className="hidden xl:flex items-center gap-2.5 shrink-0">
-              <button
-                onClick={() => handleNavClick('settings')}
-                className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full font-medium border transition-colors ${
-                  isCloud
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                    : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                }`}
-                title={isCloud ? 'Connected to Firebase Firestore' : 'Running locally in browser'}
-              >
-                {isCloud ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Cloud Synced</span>
-                  </>
-                ) : (
-                  <>
-                    <HardDrive className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Local Mode</span>
-                  </>
-                )}
-              </button>
+              {isAdmin ? (
+                <button
+                  onClick={() => handleNavClick('settings')}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full font-medium border transition-colors cursor-pointer ${
+                    isCloud
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  }`}
+                  title={isCloud ? 'Connected to Firebase Firestore (Click for Settings)' : 'Running locally in browser'}
+                >
+                  {isCloud ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Cloud Synced</span>
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Local Mode</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full font-medium border ${
+                    isCloud
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}
+                  title={isCloud ? 'Connected to Firebase Firestore' : 'Running locally in browser'}
+                >
+                  {isCloud ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Cloud Synced</span>
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Local Mode</span>
+                    </>
+                  )}
+                </div>
+              )}
 
               {currentUser && (
                 <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
@@ -217,11 +244,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout 
       {/* Sleek Mobile Bottom Navigation Bar for Smart Phones (md:hidden) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-2 py-1.5 flex items-center justify-around">
         {[
-          { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'ingredients', label: 'Ingredients', icon: Wheat },
           { id: 'recipes', label: 'Recipes', icon: BookOpen },
           { id: 'calculator', label: 'Costing', icon: Calculator },
-          { id: 'reports', label: 'Reports', icon: Settings }
+          { id: 'reports', label: 'Reports', icon: FileText },
+          ...(isAdmin ? [{ id: 'settings', label: 'Settings', icon: Settings }] : [])
         ].map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

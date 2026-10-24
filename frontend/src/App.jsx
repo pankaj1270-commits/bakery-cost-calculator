@@ -8,7 +8,7 @@ import RecipeDetail from './pages/RecipeDetail.jsx';
 import Reports from './pages/Reports.jsx';
 import SettingsPage from './pages/Settings.jsx';
 import { firebaseService } from './services/firebase.js';
-import { userService } from './services/userService.js';
+import { userService, isUserAdmin } from './services/userService.js';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -99,9 +99,25 @@ export default function App() {
         )}
 
         {activeTab === 'settings' && (
-          <SettingsPage 
-            onReload={handleReload} 
-          />
+          isUserAdmin(currentUser) ? (
+            <SettingsPage onReload={handleReload} />
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center max-w-lg mx-auto shadow-sm space-y-3">
+              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-xl">
+                🔒
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900">Settings Restricted</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                System & Database configuration settings are restricted to administrator accounts.
+              </p>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-500/20 transition-all"
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          )
         )}
       </main>
 
