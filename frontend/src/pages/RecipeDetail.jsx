@@ -25,6 +25,95 @@ import { exportRecipeToPdf } from '../utils/exportPdf.js';
 import { exportRecipeToExcel } from '../utils/exportExcel.js';
 import { formatINR } from '../utils/formatters.js';
 
+// Helper to recompute recipe items, overheads, and profit with live ingredient matching
+function computeRecipeState(updatedRecipe, ingredients = []) {
+  const currentIngs = ingredients || [];
+  const currentIngMap = new Map(currentIngs.map(i => [i.id, i]));
+
+  const computedItems = (updatedRecipe.items || []).map(item => {
+    let liveIng = currentIngMap.get(item.ingredientId);
+    if (!liveIng && item.name) {
+      const cleanName = item.name.trim().toLowerCase();
+      liveIng = currentIngs.find(i => (i.name || '').trim().toLowerCase() === cleanName);
+    }
+
+    let purchaseQuantity = item.snapshotPurchaseQty;
+    let purchaseUnit = item.snapshotPurchaseUnit;
+    let purchasePrice = item.snapshotPurchasePrice;
+
+    if (!updatedRecipe.useHistoricalPricing && liveIng) {
+      purchaseQuantity = liveIng.purchaseQuantity;
+      purchaseUnit = liveIng.purchaseUnit;
+      purchasePrice = liveIng.purchasePrice;
+    } else if (liveIng && (!purchasePrice || Number(purchasePrice) === 0)) {
+      purchaseQuantity = liveIng.purchaseQuantity;
+      purchaseUnit = liveIng.purchaseUnit;
+      purchasePrice = liveIng.purchasePrice;
+    }
+
+    const calculatedCost = calculateIngredientCostInRecipe({
+      recipeQuantity: item.quantity,
+      recipeUnit: item.unit,
+      purchaseQuantity: purchaseQuantity || 1,
+      purchaseUnit: purchaseUnit || 'g',
+      purchasePrice: purchasePrice || 0
+    });
+
+    return {
+      ...item,
+      ingredientId: liveIng ? liveIng.id : item.ingredientId,
+      name: (liveIng ? liveIng.name : item.name) || 'Unknown Ingredient',
+      purchaseQuantity: purchaseQuantity || 1,
+      purchaseUnit: purchaseUnit || 'g',
+      purchasePrice: purchasePrice || 0,
+      snapshotPurchaseQty: purchaseQuantity || 1,
+      snapshotPurchaseUnit: purchaseUnit || 'g',
+      snapshotPurchasePrice: purchasePrice || 0,
+      snapshotCostPerBaseUnit: liveIng ? liveIng.costPerBaseUnit : (item.snapshotCostPerBaseUnit || 0),
+      calculatedCost
+    };
+  });
+
+  const ingCalc = calculateRecipeIngredientCosts(computedItems);
+
+  const prodCalc = calculateProductionCost({
+    ingredientCost: ingCalc.totalIngredientCost,
+    packagingCost: updatedRecipe.packagingCost,
+    labourCost: updatedRecipe.labourCost,
+    utilitiesCost: updatedRecipe.utilitiesCost,
+    transportCost: updatedRecipe.transportCost,
+    otherExpenses: updatedRecipe.otherExpenses,
+    wastagePercentage: updatedRecipe.wastagePercentage,
+    wastageBasis: updatedRecipe.wastageBasis,
+    yieldCount: updatedRecipe.yieldCount
+  });
+
+  const profitCalc = calculateSellingPriceAndProfit({
+    costPerProduct: prodCalc.costPerProduct,
+    yieldCount: prodCalc.yieldCount,
+    pricingStrategy: updatedRecipe.pricingStrategy || 'margin',
+    targetPercentage: updatedRecipe.targetPercentage || 30
+  });
+
+  return {
+    ...updatedRecipe,
+    items: computedItems.map(ci => ({
+      ingredientId: ci.ingredientId,
+      name: ci.name,
+      quantity: ci.quantity,
+      unit: ci.unit,
+      snapshotPurchaseQty: ci.snapshotPurchaseQty,
+      snapshotPurchaseUnit: ci.snapshotPurchaseUnit,
+      snapshotPurchasePrice: ci.snapshotPurchasePrice,
+      snapshotCostPerBaseUnit: ci.snapshotCostPerBaseUnit
+    })),
+    computedItems: ingCalc.items,
+    totalIngredientCost: ingCalc.totalIngredientCost,
+    productionCost: prodCalc,
+    profitAnalysis: profitCalc
+  };
+}
+
 export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
   const [recipe, setRecipe] = useState(null);
   const [ingredients, setIngredients] = useState([]);
@@ -168,95 +257,6 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
       pricingStrategy: newPricing.pricingStrategy,
       targetPercentage: newPricing.targetPercentage
     });
-  };
-
-  // Helper to recompute recipe items, overheads, and profit with live ingredient matching
-  const computeRecipeState = (updatedRecipe, overrideIngredients = null) => {
-    const currentIngs = overrideIngredients || ingredients;
-    const currentIngMap = new Map(currentIngs.map(i => [i.id, i]));
-
-    const computedItems = (updatedRecipe.items || []).map(item => {
-      let liveIng = currentIngMap.get(item.ingredientId);
-      if (!liveIng && item.name) {
-        const cleanName = item.name.trim().toLowerCase();
-        liveIng = currentIngs.find(i => (i.name || '').trim().toLowerCase() === cleanName);
-      }
-
-      let purchaseQuantity = item.snapshotPurchaseQty;
-      let purchaseUnit = item.snapshotPurchaseUnit;
-      let purchasePrice = item.snapshotPurchasePrice;
-
-      if (!updatedRecipe.useHistoricalPricing && liveIng) {
-        purchaseQuantity = liveIng.purchaseQuantity;
-        purchaseUnit = liveIng.purchaseUnit;
-        purchasePrice = liveIng.purchasePrice;
-      } else if (liveIng && (!purchasePrice || Number(purchasePrice) === 0)) {
-        purchaseQuantity = liveIng.purchaseQuantity;
-        purchaseUnit = liveIng.purchaseUnit;
-        purchasePrice = liveIng.purchasePrice;
-      }
-
-      const calculatedCost = calculateIngredientCostInRecipe({
-        recipeQuantity: item.quantity,
-        recipeUnit: item.unit,
-        purchaseQuantity: purchaseQuantity || 1,
-        purchaseUnit: purchaseUnit || 'g',
-        purchasePrice: purchasePrice || 0
-      });
-
-      return {
-        ...item,
-        ingredientId: liveIng ? liveIng.id : item.ingredientId,
-        name: (liveIng ? liveIng.name : item.name) || 'Unknown Ingredient',
-        purchaseQuantity: purchaseQuantity || 1,
-        purchaseUnit: purchaseUnit || 'g',
-        purchasePrice: purchasePrice || 0,
-        snapshotPurchaseQty: purchaseQuantity || 1,
-        snapshotPurchaseUnit: purchaseUnit || 'g',
-        snapshotPurchasePrice: purchasePrice || 0,
-        snapshotCostPerBaseUnit: liveIng ? liveIng.costPerBaseUnit : (item.snapshotCostPerBaseUnit || 0),
-        calculatedCost
-      };
-    });
-
-    const ingCalc = calculateRecipeIngredientCosts(computedItems);
-
-    const prodCalc = calculateProductionCost({
-      ingredientCost: ingCalc.totalIngredientCost,
-      packagingCost: updatedRecipe.packagingCost,
-      labourCost: updatedRecipe.labourCost,
-      utilitiesCost: updatedRecipe.utilitiesCost,
-      transportCost: updatedRecipe.transportCost,
-      otherExpenses: updatedRecipe.otherExpenses,
-      wastagePercentage: updatedRecipe.wastagePercentage,
-      wastageBasis: updatedRecipe.wastageBasis,
-      yieldCount: updatedRecipe.yieldCount
-    });
-
-    const profitCalc = calculateSellingPriceAndProfit({
-      costPerProduct: prodCalc.costPerProduct,
-      yieldCount: prodCalc.yieldCount,
-      pricingStrategy: updatedRecipe.pricingStrategy || 'margin',
-      targetPercentage: updatedRecipe.targetPercentage || 30
-    });
-
-    return {
-      ...updatedRecipe,
-      items: computedItems.map(ci => ({
-        ingredientId: ci.ingredientId,
-        name: ci.name,
-        quantity: ci.quantity,
-        unit: ci.unit,
-        snapshotPurchaseQty: ci.snapshotPurchaseQty,
-        snapshotPurchaseUnit: ci.snapshotPurchaseUnit,
-        snapshotPurchasePrice: ci.snapshotPurchasePrice,
-        snapshotCostPerBaseUnit: ci.snapshotCostPerBaseUnit
-      })),
-      computedItems: ingCalc.items,
-      totalIngredientCost: ingCalc.totalIngredientCost,
-      productionCost: prodCalc,
-      profitAnalysis: profitCalc
-    };
   };
 
   // Client-side instant recalculation
