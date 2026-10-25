@@ -723,7 +723,11 @@ class Storage {
     const ingredientsMap = new Map(this.data.ingredients.map(i => [i.id, i]));
 
     const computedItems = (recipe.items || []).map(item => {
-      const liveIng = ingredientsMap.get(item.ingredientId);
+      let liveIng = ingredientsMap.get(item.ingredientId);
+      if (!liveIng && item.name) {
+        const cleanName = item.name.trim().toLowerCase();
+        liveIng = this.data.ingredients.find(i => (i.name || '').trim().toLowerCase() === cleanName);
+      }
 
       let purchaseQuantity = item.snapshotPurchaseQty;
       let purchaseUnit = item.snapshotPurchaseUnit;
@@ -733,11 +737,16 @@ class Storage {
         purchaseQuantity = liveIng.purchaseQuantity;
         purchaseUnit = liveIng.purchaseUnit;
         purchasePrice = liveIng.purchasePrice;
+      } else if (liveIng && (!purchasePrice || Number(purchasePrice) === 0)) {
+        purchaseQuantity = liveIng.purchaseQuantity;
+        purchaseUnit = liveIng.purchaseUnit;
+        purchasePrice = liveIng.purchasePrice;
       }
 
       return {
         ...item,
-        name: item.name || (liveIng ? liveIng.name : 'Unknown Ingredient'),
+        ingredientId: liveIng ? liveIng.id : item.ingredientId,
+        name: (liveIng ? liveIng.name : item.name) || 'Unknown Ingredient',
         purchaseQuantity: purchaseQuantity || 1,
         purchaseUnit: purchaseUnit || 'g',
         purchasePrice: purchasePrice || 0

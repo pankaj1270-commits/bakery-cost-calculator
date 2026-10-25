@@ -28,6 +28,18 @@ class LocalStorageService {
   }
 
   // --- INGREDIENTS ---
+  setIngredients(list) {
+    if (Array.isArray(list)) {
+      localStorage.setItem(STORAGE_KEYS.INGREDIENTS, JSON.stringify(list));
+    }
+  }
+
+  setRecipes(list) {
+    if (Array.isArray(list)) {
+      localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(list));
+    }
+  }
+
   getIngredients(category = null, search = '') {
     const raw = localStorage.getItem(STORAGE_KEYS.INGREDIENTS);
     let list = raw ? JSON.parse(raw) : INITIAL_INGREDIENTS;
@@ -210,12 +222,18 @@ class LocalStorageService {
     return this.calculateFullRecipeCost(recipe);
   }
 
-  calculateFullRecipeCost(recipe) {
-    const ingredients = this.getIngredients();
+  calculateFullRecipeCost(recipe, overrideIngredients = null) {
+    const ingredients = (overrideIngredients && overrideIngredients.length > 0)
+      ? overrideIngredients
+      : this.getIngredients();
     const ingMap = new Map(ingredients.map(i => [i.id, i]));
 
     const computedItems = (recipe.items || []).map(item => {
-      const liveIng = ingMap.get(item.ingredientId);
+      let liveIng = ingMap.get(item.ingredientId);
+      if (!liveIng && item.name) {
+        const lowerName = item.name.trim().toLowerCase();
+        liveIng = ingredients.find(i => (i.name || '').trim().toLowerCase() === lowerName);
+      }
 
       let purchaseQuantity = item.snapshotPurchaseQty;
       let purchaseUnit = item.snapshotPurchaseUnit;
@@ -225,11 +243,16 @@ class LocalStorageService {
         purchaseQuantity = liveIng.purchaseQuantity;
         purchaseUnit = liveIng.purchaseUnit;
         purchasePrice = liveIng.purchasePrice;
+      } else if (liveIng && (!purchasePrice || Number(purchasePrice) === 0)) {
+        purchaseQuantity = liveIng.purchaseQuantity;
+        purchaseUnit = liveIng.purchaseUnit;
+        purchasePrice = liveIng.purchasePrice;
       }
 
       return {
         ...item,
-        name: item.name || (liveIng ? liveIng.name : 'Unknown Ingredient'),
+        ingredientId: liveIng ? liveIng.id : item.ingredientId,
+        name: (liveIng ? liveIng.name : item.name) || 'Unknown Ingredient',
         purchaseQuantity: purchaseQuantity || 1,
         purchaseUnit: purchaseUnit || 'g',
         purchasePrice: purchasePrice || 0
@@ -265,22 +288,32 @@ class LocalStorageService {
     };
   }
 
-  createRecipe(payload) {
+  createRecipe(payload, overrideIngredients = null) {
     const rawList = this.getRawRecipes();
-    const ingredients = this.getIngredients();
+    const ingredients = (overrideIngredients && overrideIngredients.length > 0)
+      ? overrideIngredients
+      : this.getIngredients();
     const ingMap = new Map(ingredients.map(i => [i.id, i]));
 
     const items = (payload.items || []).map(item => {
-      const ing = ingMap.get(item.ingredientId);
+      let ing = ingMap.get(item.ingredientId);
+      if (!ing && item.name) {
+        const lowerName = item.name.trim().toLowerCase();
+        ing = ingredients.find(i => (i.name || '').trim().toLowerCase() === lowerName);
+      }
       return {
-        ingredientId: item.ingredientId,
-        name: item.name || (ing ? ing.name : ''),
+        ingredientId: ing ? ing.id : item.ingredientId,
+        name: (ing ? ing.name : item.name) || '',
         quantity: Number(item.quantity) || 0,
         unit: item.unit || 'g',
-        snapshotPurchaseQty: ing ? ing.purchaseQuantity : 1,
-        snapshotPurchaseUnit: ing ? ing.purchaseUnit : 'g',
-        snapshotPurchasePrice: ing ? ing.purchasePrice : 0,
-        snapshotCostPerBaseUnit: ing ? ing.costPerBaseUnit : 0
+        snapshotPurchaseQty: item.snapshotPurchaseQty || (ing ? ing.purchaseQuantity : 1),
+        snapshotPurchaseUnit: item.snapshotPurchaseUnit || (ing ? ing.purchaseUnit : 'g'),
+        snapshotPurchasePrice: (item.snapshotPurchasePrice !== undefined && Number(item.snapshotPurchasePrice) > 0)
+          ? Number(item.snapshotPurchasePrice)
+          : (ing ? ing.purchasePrice : 0),
+        snapshotCostPerBaseUnit: item.snapshotCostPerBaseUnit !== undefined
+          ? item.snapshotCostPerBaseUnit
+          : (ing ? ing.costPerBaseUnit : 0)
       };
     });
 
@@ -312,28 +345,43 @@ class LocalStorageService {
     return this.calculateFullRecipeCost(newRecipe);
   }
 
-  updateRecipe(id, payload) {
+  updateRecipe(id, payload, overrideIngredients = null) {
     const rawList = this.getRawRecipes();
     const index = rawList.findIndex(r => r.id === id);
     if (index === -1) return null;
 
     const current = rawList[index];
-    const ingredients = this.getIngredients();
+    const ingredients = (overrideIngredients && overrideIngredients.length > 0)
+      ? overrideIngredients
+      : this.getIngredients();
     const ingMap = new Map(ingredients.map(i => [i.id, i]));
 
     let items = current.items;
     if (payload.items) {
       items = payload.items.map(item => {
-        const ing = ingMap.get(item.ingredientId);
+        let ing = ingMap.get(item.ingredientId);
+        if (!ing && item.name) {
+          const lowerName = item.name.trim().toLowerCase();
+          ing = ingredients.find(i => (i.name || '').trim().toLowerCase() === lowerName);
+        }
+        const finalPrice = (item.snapshotPurchasePrice !== undefined && item.snapshotPurchasePrice !== null && Number(item.snapshotPurchasePrice) > 0)
+          ? Number(item.snapshotPurchasePrice)
+          : (ing ? ing.purchasePrice : 0);
+        const finalQty = item.snapshotPurchaseQty || (ing ? ing.purchaseQuantity : 1);
+        const finalUnit = item.snapshotPurchaseUnit || (ing ? ing.purchaseUnit : 'g');
+        const finalCostBase = item.snapshotCostPerBaseUnit !== undefined
+          ? item.snapshotCostPerBaseUnit
+          : (ing ? ing.costPerBaseUnit : 0);
+
         return {
-          ingredientId: item.ingredientId,
-          name: item.name || (ing ? ing.name : ''),
+          ingredientId: (ing ? ing.id : item.ingredientId),
+          name: (ing ? ing.name : item.name) || '',
           quantity: Number(item.quantity) || 0,
           unit: item.unit || 'g',
-          snapshotPurchaseQty: item.snapshotPurchaseQty || (ing ? ing.purchaseQuantity : 1),
-          snapshotPurchaseUnit: item.snapshotPurchaseUnit || (ing ? ing.purchaseUnit : 'g'),
-          snapshotPurchasePrice: item.snapshotPurchasePrice !== undefined ? item.snapshotPurchasePrice : (ing ? ing.purchasePrice : 0),
-          snapshotCostPerBaseUnit: item.snapshotCostPerBaseUnit !== undefined ? item.snapshotCostPerBaseUnit : (ing ? ing.costPerBaseUnit : 0)
+          snapshotPurchaseQty: finalQty,
+          snapshotPurchaseUnit: finalUnit,
+          snapshotPurchasePrice: finalPrice,
+          snapshotCostPerBaseUnit: finalCostBase
         };
       });
     }

@@ -73,8 +73,13 @@ export default function RecipeModal({
         ...formData.items,
         {
           ingredientId: first.id,
+          name: first.name,
           quantity: 100,
-          unit: first.baseUnit || 'g'
+          unit: first.baseUnit || 'g',
+          snapshotPurchaseQty: first.purchaseQuantity || 1,
+          snapshotPurchaseUnit: first.purchaseUnit || 'g',
+          snapshotPurchasePrice: first.purchasePrice || 0,
+          snapshotCostPerBaseUnit: first.costPerBaseUnit || 0
         }
       ]
     });
@@ -88,7 +93,21 @@ export default function RecipeModal({
 
   const handleItemChange = (index, field, val) => {
     const next = [...formData.items];
-    next[index] = { ...next[index], [field]: val };
+    if (field === 'ingredientId') {
+      const selectedIng = ingMap.get(val) || availableIngredients.find(i => i.id === val);
+      next[index] = {
+        ...next[index],
+        ingredientId: val,
+        name: selectedIng ? selectedIng.name : next[index].name,
+        unit: selectedIng ? selectedIng.baseUnit || 'g' : (next[index].unit || 'g'),
+        snapshotPurchaseQty: selectedIng ? selectedIng.purchaseQuantity : 1,
+        snapshotPurchaseUnit: selectedIng ? selectedIng.purchaseUnit : 'g',
+        snapshotPurchasePrice: selectedIng ? selectedIng.purchasePrice : 0,
+        snapshotCostPerBaseUnit: selectedIng ? selectedIng.costPerBaseUnit : 0
+      };
+    } else {
+      next[index] = { ...next[index], [field]: val };
+    }
     setFormData({ ...formData, items: next });
   };
 

@@ -49,7 +49,9 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
       const targetId = recipeId || (recList[0] ? recList[0].id : null);
       if (targetId) {
         const found = await api.getRecipeById(targetId);
-        setRecipe(found);
+        if (found) {
+          setRecipe(computeRecipeState(found, ingList));
+        }
       }
     } catch (err) {
       console.error('Failed to load recipe workspace:', err);
@@ -89,12 +91,16 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
 
   const handleItemIngredientChange = (idx, newIngId) => {
     const updatedItems = [...recipe.items];
-    const newIng = ingMap.get(newIngId);
+    const newIng = ingMap.get(newIngId) || ingredients.find(i => i.id === newIngId);
     updatedItems[idx] = {
       ...updatedItems[idx],
       ingredientId: newIngId,
       name: newIng ? newIng.name : '',
-      unit: newIng ? newIng.baseUnit || 'g' : 'g'
+      unit: newIng ? newIng.baseUnit || 'g' : 'g',
+      snapshotPurchaseQty: newIng ? newIng.purchaseQuantity : 1,
+      snapshotPurchaseUnit: newIng ? newIng.purchaseUnit : 'g',
+      snapshotPurchasePrice: newIng ? newIng.purchasePrice : 0,
+      snapshotCostPerBaseUnit: newIng ? newIng.costPerBaseUnit : 0
     };
     recalculateState({ ...recipe, items: updatedItems });
   };
@@ -164,16 +170,27 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
     });
   };
 
-  // Client-side instant recalculation
-  const recalculateState = (updatedRecipe) => {
+  // Helper to recompute recipe items, overheads, and profit with live ingredient matching
+  const computeRecipeState = (updatedRecipe, overrideIngredients = null) => {
+    const currentIngs = overrideIngredients || ingredients;
+    const currentIngMap = new Map(currentIngs.map(i => [i.id, i]));
+
     const computedItems = (updatedRecipe.items || []).map(item => {
-      const liveIng = ingMap.get(item.ingredientId);
+      let liveIng = currentIngMap.get(item.ingredientId);
+      if (!liveIng && item.name) {
+        const cleanName = item.name.trim().toLowerCase();
+        liveIng = currentIngs.find(i => (i.name || '').trim().toLowerCase() === cleanName);
+      }
 
       let purchaseQuantity = item.snapshotPurchaseQty;
       let purchaseUnit = item.snapshotPurchaseUnit;
       let purchasePrice = item.snapshotPurchasePrice;
 
       if (!updatedRecipe.useHistoricalPricing && liveIng) {
+        purchaseQuantity = liveIng.purchaseQuantity;
+        purchaseUnit = liveIng.purchaseUnit;
+        purchasePrice = liveIng.purchasePrice;
+      } else if (liveIng && (!purchasePrice || Number(purchasePrice) === 0)) {
         purchaseQuantity = liveIng.purchaseQuantity;
         purchaseUnit = liveIng.purchaseUnit;
         purchasePrice = liveIng.purchasePrice;
@@ -189,10 +206,15 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
 
       return {
         ...item,
-        name: item.name || (liveIng ? liveIng.name : 'Unknown Ingredient'),
+        ingredientId: liveIng ? liveIng.id : item.ingredientId,
+        name: (liveIng ? liveIng.name : item.name) || 'Unknown Ingredient',
         purchaseQuantity: purchaseQuantity || 1,
         purchaseUnit: purchaseUnit || 'g',
         purchasePrice: purchasePrice || 0,
+        snapshotPurchaseQty: purchaseQuantity || 1,
+        snapshotPurchaseUnit: purchaseUnit || 'g',
+        snapshotPurchasePrice: purchasePrice || 0,
+        snapshotCostPerBaseUnit: liveIng ? liveIng.costPerBaseUnit : (item.snapshotCostPerBaseUnit || 0),
         calculatedCost
       };
     });
@@ -218,19 +240,35 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
       targetPercentage: updatedRecipe.targetPercentage || 30
     });
 
-    setRecipe({
+    return {
       ...updatedRecipe,
+      items: computedItems.map(ci => ({
+        ingredientId: ci.ingredientId,
+        name: ci.name,
+        quantity: ci.quantity,
+        unit: ci.unit,
+        snapshotPurchaseQty: ci.snapshotPurchaseQty,
+        snapshotPurchaseUnit: ci.snapshotPurchaseUnit,
+        snapshotPurchasePrice: ci.snapshotPurchasePrice,
+        snapshotCostPerBaseUnit: ci.snapshotCostPerBaseUnit
+      })),
       computedItems: ingCalc.items,
       totalIngredientCost: ingCalc.totalIngredientCost,
       productionCost: prodCalc,
       profitAnalysis: profitCalc
-    });
+    };
+  };
+
+  // Client-side instant recalculation
+  const recalculateState = (updatedRecipe) => {
+    setRecipe(computeRecipeState(updatedRecipe, ingredients));
   };
 
   // Persist changes to storage
   const handleSaveRecipe = async () => {
     try {
-      await api.updateRecipe(recipe.id, recipe);
+      const refreshed = computeRecipeState(recipe, ingredients);
+      await api.updateRecipe(recipe.id, refreshed);
       setSavedFeedback(true);
       setTimeout(() => setSavedFeedback(false), 2500);
       if (onRecipeChange) onRecipeChange();
@@ -523,6 +561,11 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
                         onChange={(e) => handleItemIngredientChange(idx, e.target.value)}
                         className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-200"
                       >
+                        {!ingredients.some(ing => ing.id === item.ingredientId) && item.ingredientId && (
+                          <option value={item.ingredientId}>
+                            {item.name || 'Selected Ingredient'} ({formatINR(item.purchasePrice)} / {item.purchaseQuantity || 1} {item.purchaseUnit || 'g'})
+                          </option>
+                        )}
                         {ingredients.map((ing) => (
                           <option key={ing.id} value={ing.id}>
                             {ing.name} ({formatINR(ing.purchasePrice)} / {ing.purchaseQuantity} {ing.purchaseUnit})

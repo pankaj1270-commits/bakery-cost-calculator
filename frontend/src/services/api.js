@@ -25,6 +25,7 @@ export const api = {
         }
       }
       if (fsData && fsData.length > 0) {
+        localStore.setIngredients(fsData);
         let list = fsData;
         if (category && category !== 'All') {
           list = list.filter(i => (i.category || '').toLowerCase() === category.toLowerCase());
@@ -88,7 +89,11 @@ export const api = {
   async getRecipes(category, search) {
     const userId = getActiveUserId();
     if (firebaseService.isConfigured && userId) {
-      let fsData = await firebaseService.getRecipes(userId);
+      const [fsDataRaw, fsIngredients] = await Promise.all([
+        firebaseService.getRecipes(userId),
+        firebaseService.getIngredients(userId)
+      ]);
+      let fsData = fsDataRaw;
       // Auto-sync initial recipes to user's private Firestore space if empty
       if (!fsData || fsData.length === 0) {
         const localList = localStore.getRawRecipes();
@@ -99,8 +104,13 @@ export const api = {
           fsData = localList;
         }
       }
+      if (fsIngredients && fsIngredients.length > 0) {
+        localStore.setIngredients(fsIngredients);
+      }
       if (fsData && fsData.length > 0) {
-        let list = fsData.map(r => localStore.calculateFullRecipeCost(r));
+        localStore.setRecipes(fsData);
+        const liveIngs = (fsIngredients && fsIngredients.length > 0) ? fsIngredients : localStore.getIngredients();
+        let list = fsData.map(r => localStore.calculateFullRecipeCost(r, liveIngs));
         if (category && category !== 'All') {
           list = list.filter(r => (r.category || '').toLowerCase() === category.toLowerCase());
         }
@@ -121,17 +131,31 @@ export const api = {
   async getRecipeById(id) {
     const userId = getActiveUserId();
     if (firebaseService.isConfigured && userId) {
-      const fsRecipe = await firebaseService.getRecipeById(id, userId);
+      const [fsRecipe, fsIngredients] = await Promise.all([
+        firebaseService.getRecipeById(id, userId),
+        firebaseService.getIngredients(userId)
+      ]);
+      if (fsIngredients && fsIngredients.length > 0) {
+        localStore.setIngredients(fsIngredients);
+      }
       if (fsRecipe) {
-        return localStore.calculateFullRecipeCost(fsRecipe);
+        const liveIngs = (fsIngredients && fsIngredients.length > 0) ? fsIngredients : localStore.getIngredients();
+        return localStore.calculateFullRecipeCost(fsRecipe, liveIngs);
       }
     }
     return localStore.getRecipeById(id);
   },
 
   async createRecipe(payload) {
-    const recipe = localStore.createRecipe(payload);
     const userId = getActiveUserId();
+    let fsIngredients = null;
+    if (firebaseService.isConfigured && userId) {
+      fsIngredients = await firebaseService.getIngredients(userId);
+      if (fsIngredients && fsIngredients.length > 0) {
+        localStore.setIngredients(fsIngredients);
+      }
+    }
+    const recipe = localStore.createRecipe(payload, fsIngredients);
     if (firebaseService.isConfigured && recipe && userId) {
       const rawRecipe = localStore.getRawRecipes().find(r => r.id === recipe.id);
       await firebaseService.saveRecipe(rawRecipe || recipe, userId);
@@ -140,8 +164,15 @@ export const api = {
   },
 
   async updateRecipe(id, payload) {
-    const updated = localStore.updateRecipe(id, payload);
     const userId = getActiveUserId();
+    let fsIngredients = null;
+    if (firebaseService.isConfigured && userId) {
+      fsIngredients = await firebaseService.getIngredients(userId);
+      if (fsIngredients && fsIngredients.length > 0) {
+        localStore.setIngredients(fsIngredients);
+      }
+    }
+    const updated = localStore.updateRecipe(id, payload, fsIngredients);
     if (firebaseService.isConfigured && userId) {
       const rawRecipe = localStore.getRawRecipes().find(r => r.id === id);
       await firebaseService.saveRecipe(rawRecipe || payload, userId);
