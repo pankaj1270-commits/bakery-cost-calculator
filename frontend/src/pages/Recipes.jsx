@@ -11,7 +11,8 @@ import {
   FileText,
   Percent,
   Layers,
-  Sparkles
+  Sparkles,
+  Pencil
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import RecipeModal from '../components/RecipeModal.jsx';
@@ -29,6 +30,7 @@ export default function Recipes({ onOpenRecipe }) {
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -86,16 +88,21 @@ export default function Recipes({ onOpenRecipe }) {
     }
   };
 
-  const handleCreateRecipe = async (formData) => {
+  const handleSaveRecipeModal = async (formData) => {
     try {
-      const newRec = await api.createRecipe(formData);
+      if (editingRecipe) {
+        await api.updateRecipe(editingRecipe.id, formData);
+        setEditingRecipe(null);
+      } else {
+        const newRec = await api.createRecipe(formData);
+        if (newRec && newRec.id) {
+          onOpenRecipe(newRec.id);
+        }
+      }
       setModalOpen(false);
       loadData();
-      if (newRec && newRec.id) {
-        onOpenRecipe(newRec.id);
-      }
     } catch (err) {
-      alert('Error creating recipe: ' + err.message);
+      alert('Error saving recipe: ' + err.message);
     }
   };
 
@@ -123,7 +130,10 @@ export default function Recipes({ onOpenRecipe }) {
           </button>
 
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => {
+              setEditingRecipe(null);
+              setModalOpen(true);
+            }}
             className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-500/25 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -266,6 +276,17 @@ export default function Recipes({ onOpenRecipe }) {
                 <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1">
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingRecipe(r);
+                        setModalOpen(true);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-amber-800 hover:bg-slate-200 transition-colors"
+                      title="Edit / Rename Recipe"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={(e) => handleDuplicate(r.id, e)}
                       className="p-1.5 rounded-lg text-slate-500 hover:text-amber-800 hover:bg-slate-200 transition-colors"
                       title="Duplicate Recipe"
@@ -321,9 +342,13 @@ export default function Recipes({ onOpenRecipe }) {
       {/* Modals */}
       <RecipeModal
         isOpen={modalOpen}
+        recipe={editingRecipe}
         availableIngredients={ingredients}
-        onClose={() => setModalOpen(false)}
-        onSave={handleCreateRecipe}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingRecipe(null);
+        }}
+        onSave={handleSaveRecipeModal}
       />
 
       <ConfirmDialog

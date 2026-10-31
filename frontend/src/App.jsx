@@ -12,7 +12,13 @@ import { userService, isUserAdmin } from './services/userService.js';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [activeRecipeId, setActiveRecipeId] = useState('rec-1'); // Default to Biscuit recipe spec
+  const [activeRecipeId, setActiveRecipeId] = useState(() => {
+    try {
+      return localStorage.getItem('bakecost_active_recipe_id') || 'rec-1';
+    } catch (e) {
+      return 'rec-1';
+    }
+  });
   const [reloadKey, setReloadKey] = useState(0);
 
   // Auth state
@@ -29,6 +35,9 @@ export default function App() {
 
   const handleOpenRecipe = (recipeId) => {
     setActiveRecipeId(recipeId);
+    try {
+      localStorage.setItem('bakecost_active_recipe_id', recipeId);
+    } catch (e) {}
     setActiveTab('calculator');
   };
 
@@ -58,7 +67,7 @@ export default function App() {
   }
 
   return (
-    <div key={reloadKey} className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -88,7 +97,13 @@ export default function App() {
           <RecipeDetail 
             recipeId={activeRecipeId} 
             onBack={() => setActiveTab('recipes')}
-            onRecipeChange={handleReload}
+            onSelectRecipe={(newId) => {
+              setActiveRecipeId(newId);
+              try {
+                localStorage.setItem('bakecost_active_recipe_id', newId);
+              } catch (e) {}
+            }}
+            onRecipeChange={() => {}}
           />
         )}
 
@@ -100,7 +115,7 @@ export default function App() {
 
         {activeTab === 'settings' && (
           isUserAdmin(currentUser) ? (
-            <SettingsPage onReload={handleReload} />
+            <SettingsPage key={reloadKey} onReload={handleReload} />
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center max-w-lg mx-auto shadow-sm space-y-3">
               <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-xl">

@@ -34,12 +34,14 @@ export default function RecipeModal({
   useEffect(() => {
     if (recipe) {
       setFormData({
+        ...recipe,
         name: recipe.name || '',
         category: recipe.category || 'Biscuits & Cookies',
         description: recipe.description || '',
         yieldCount: recipe.yieldCount || 1,
         yieldUnit: recipe.yieldUnit || 'pieces',
         items: (recipe.items || []).map(it => ({
+          ...it,
           ingredientId: it.ingredientId,
           quantity: it.quantity,
           unit: it.unit

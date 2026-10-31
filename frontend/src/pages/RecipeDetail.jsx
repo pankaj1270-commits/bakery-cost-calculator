@@ -14,7 +14,9 @@ import {
   Sparkles,
   AlertCircle,
   HelpCircle,
-  Check
+  Check,
+  Pencil,
+  X
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import ProductionCostCard from '../components/ProductionCostCard.jsx';
@@ -114,18 +116,20 @@ function computeRecipeState(updatedRecipe, ingredients = []) {
   };
 }
 
-export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
+export default function RecipeDetail({ recipeId, onBack, onRecipeChange, onSelectRecipe }) {
   const [recipe, setRecipe] = useState(null);
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [allRecipes, setAllRecipes] = useState([]);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
 
   useEffect(() => {
     loadData();
   }, [recipeId]);
 
-  const loadData = async () => {
+  const loadData = async (targetRecipeId = null) => {
     try {
       setLoading(true);
       const [recList, ingList] = await Promise.all([
@@ -135,11 +139,12 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
       setAllRecipes(recList);
       setIngredients(ingList);
 
-      const targetId = recipeId || (recList[0] ? recList[0].id : null);
+      const targetId = targetRecipeId || recipeId || (recList[0] ? recList[0].id : null);
       if (targetId) {
         const found = await api.getRecipeById(targetId);
         if (found) {
           setRecipe(computeRecipeState(found, ingList));
+          if (onSelectRecipe) onSelectRecipe(targetId);
         }
       }
     } catch (err) {
@@ -147,6 +152,50 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleQuickSwitchRecipe = async (targetId) => {
+    if (!targetId || targetId === recipe?.id) return;
+    try {
+      const found = await api.getRecipeById(targetId);
+      if (found) {
+        setRecipe(computeRecipeState(found, ingredients));
+        if (onSelectRecipe) onSelectRecipe(targetId);
+        try {
+          localStorage.setItem('bakecost_active_recipe_id', targetId);
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error('Failed to switch recipe:', err);
+    }
+  };
+
+  const handleStartRename = () => {
+    setNameInput(recipe?.name || '');
+    setIsEditingName(true);
+  };
+
+  const handleSaveRename = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === recipe?.name) {
+      setIsEditingName(false);
+      return;
+    }
+    const updatedRecipe = { ...recipe, name: trimmed };
+    setRecipe(updatedRecipe);
+    setIsEditingName(false);
+    setAllRecipes(prev => prev.map(r => r.id === recipe.id ? { ...r, name: trimmed } : r));
+    try {
+      await api.updateRecipe(recipe.id, updatedRecipe);
+      if (onRecipeChange) onRecipeChange();
+    } catch (err) {
+      console.error('Failed to rename recipe:', err);
+      alert('Failed to save recipe name: ' + err.message);
+    }
+  };
+
+  const handleCancelRename = () => {
+    setIsEditingName(false);
   };
 
   if (loading || !recipe) {
@@ -269,6 +318,8 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
     try {
       const refreshed = computeRecipeState(recipe, ingredients);
       await api.updateRecipe(recipe.id, refreshed);
+      setRecipe(refreshed);
+      setAllRecipes(prev => prev.map(r => r.id === refreshed.id ? { ...r, ...refreshed } : r));
       setSavedFeedback(true);
       setTimeout(() => setSavedFeedback(false), 2500);
       if (onRecipeChange) onRecipeChange();
@@ -281,7 +332,13 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
     try {
       const copy = await api.duplicateRecipe(recipe.id, `${recipe.name} (Custom Copy)`);
       if (copy && copy.id) {
-        setRecipe(copy);
+        const withState = computeRecipeState(copy, ingredients);
+        setRecipe(withState);
+        setAllRecipes(prev => [copy, ...prev]);
+        if (onSelectRecipe) onSelectRecipe(copy.id);
+        try {
+          localStorage.setItem('bakecost_active_recipe_id', copy.id);
+        } catch (e) {}
         if (onRecipeChange) onRecipeChange();
       }
     } catch (err) {
@@ -305,9 +362,49 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                {recipe.name}
-              </h1>
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveRename();
+                      if (e.key === 'Escape') handleCancelRename();
+                    }}
+                    autoFocus
+                    className="px-3 py-1.5 text-lg font-extrabold text-slate-900 bg-white border-2 border-amber-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-xs max-w-[280px] sm:max-w-md"
+                    placeholder="Enter Recipe Name"
+                  />
+                  <button
+                    onClick={handleSaveRename}
+                    className="p-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs transition-colors"
+                    title="Save Name (Enter)"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handleCancelRename}
+                    className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors"
+                    title="Cancel (Esc)"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                    {recipe.name}
+                  </h1>
+                  <button
+                    onClick={handleStartRename}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-amber-800 hover:bg-amber-50 transition-colors"
+                    title="Rename Recipe"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               {isBiscuitSpec && (
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-300">
                   Target Spec ₹660.51
@@ -327,10 +424,7 @@ export default function RecipeDetail({ recipeId, onBack, onRecipeChange }) {
           {/* Quick Recipe Switcher */}
           <select
             value={recipe.id}
-            onChange={(e) => {
-              const selected = allRecipes.find(r => r.id === e.target.value);
-              if (selected) setRecipe(selected);
-            }}
+            onChange={(e) => handleQuickSwitchRecipe(e.target.value)}
             className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-200"
           >
             {allRecipes.map((r) => (
